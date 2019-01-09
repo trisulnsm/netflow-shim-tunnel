@@ -19,6 +19,11 @@ int main(int argc, char *argv[])
 {
 	bool fDaemonize=false;
 
+	if (argc<2) {
+		cerr << USAGESTR << endl ;
+		return -1;
+	}
+
 	if (strcmp(argv[1],"-D")==0) {
 		fDaemonize=true;
 		--argc;
