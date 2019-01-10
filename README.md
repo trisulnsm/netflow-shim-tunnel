@@ -21,15 +21,26 @@ To forward from local-port to remote trisul-ip and trisul-port. The -D puts it i
 
 
 ````
-nfshim [-D]  local-ip:local-port  trisul-ip:trisul-port 
+nfshim [-D]  local-ip:local-port  trisul-ip:trisul-port  [local-ip-for-sending]
 ````
 
-For example , download the nfshim.el7 binary and run
+#### Options
 
-To forward all netflow traffic on gateway on port 2055 to Trisul running on 192.168.2.99. 
+  1.  `-D` :  send into background as daemon
+  2.  `local-ip-for-sending` : bind to a valid local IP address packets sent to trisul  will have this ip address 
+
+### Examples 
+
+#### To forward all netflow traffic on gateway on port 2055 to Trisul running on 192.168.2.99. 
 
 ````
 nfshim.el7 -D 0.0.0.0:2055 192.168.2.99:2055
+````
+
+#### To forward all traffic binding  192.168.2.76  as the source IP for sending. 192.168.2.76 must be a valid IP on the server 
+
+````
+nfshim.el7 -D 0.0.0.0:2055 192.168.2.99:2055 192.168.2.76
 ````
 
 ## On the Trisul-Probe side enable Shim

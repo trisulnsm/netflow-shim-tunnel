@@ -11,10 +11,10 @@
 
 using namespace std;
 
-static const char * USAGESTR="Usage :  nfshim [-D] local-ip:local-port  receiver-ip:receiver-port" ;
+static const char * USAGESTR="Usage :  nfshim [-D] local-ip:local-port  receiver-ip:receiver-port [local-bind-ip] " ;
 
 
-// nfshim  local-ip:local-port receiver-ip:receiver-port  
+// nfshim  local-ip:local-port receiver-ip:receiver-port  local-ip-bind 
 int main(int argc, char *argv[]) 
 {
 	bool fDaemonize=false;
@@ -31,13 +31,13 @@ int main(int argc, char *argv[])
 	}
 
 
-	if (argc != 3 ) {
+	if (argc != 3  and argc != 4 ) {
 		cerr << USAGESTR << endl ;
 		return -1;
 	}
 
 
-	std::string localip, receiverip;
+	std::string localip, receiverip, localbindip;
 	int 		localport, receiverport;
 
 	if ( not RE2::FullMatch(argv[1], "([\\d\\.]+):(\\d+)",&localip,&localport) ) {
@@ -50,6 +50,10 @@ int main(int argc, char *argv[])
 		cerr << "Error with receiver ip and port ip format " << argv[2] << endl;
 		cerr << USAGESTR << endl ;
 		return -1;
+	}
+
+	if (argc==4) {
+		localbindip=argv[3];
 	}
 
 
@@ -94,6 +98,24 @@ int main(int argc, char *argv[])
 	}
 
 
+	// For binding receiver 
+	if (not localbindip.empty()) {
+		struct sockaddr_in rbind;
+		memset(&rbind, 0, sizeof(rbind));
+		rbind.sin_family = AF_INET;
+		inet_pton(AF_INET, localbindip.c_str(), &rbind.sin_addr);
+
+		if ((bind(sock_receiver, (struct sockaddr *)&rbind,
+				  sizeof(rbind))) < 0) {
+			CPrintErrno pe(errno);
+			cerr << "Local recv bind  error=" << pe.what() << endl;
+			return -1;
+		}
+		
+		cout << "Bound to local IP for sending " << localbindip <<  endl << flush;
+	}
+
+
 	// The address to be used as a shim 
 	struct sockaddr_in client_address;
 	socklen_t  client_address_len = 0;
@@ -133,7 +155,7 @@ int main(int argc, char *argv[])
 
 		// shim the new ip 
 		if (not fDaemonize) {
-			cout << "Router " << inet_ntoa(client_address.sin_addr) << " bytes = " << len << endl;
+			cout << "Router " << inet_ntoa(client_address.sin_addr) << " bytes = " << len << endl << flush; 
 		}
 
 		U.shim.shimip=client_address.sin_addr.s_addr;
@@ -144,12 +166,12 @@ int main(int argc, char *argv[])
 
 		if (slen == -1) {
 			CPrintErrno pe(errno);
-			cerr << "sendto() error =" << pe.what() << endl;
+			cerr << "sendto() error =" << pe.what() << endl ;
 			return 1;
 		}
 
 		if (not fDaemonize) {
-			cout << "Forwarded  shimmed  bytes = " << slen << endl;
+			cout << "Forwarded  shimmed  bytes = " << slen << endl << flush;
 		}
 
 	}
