@@ -2,11 +2,15 @@
 
 Accepts Netflow from multiple routers relays it to a receiver as a shim tunnel.
 
-## Use case
 
+## Use case 
+Tunnel  NETFLOW/SFLOW from routers in a DMZ to an internal Security Zone where Trisul NetworK Analytics is running. 
 Relaying netflow to a remote Trisul without using NAT GRE or VPN tunneling.
+
 This daemon adds a 12 byte shim header before the Netflow header. 
 
+>> NEW 11-JUL-2019 :   A new nfshim-pcap tool that can read netflow directly from the interface using
+>>                     libpcap and forward via a UDP SHIM tunnel to a trisul server.
 
 
 ## On the gateway run the shim software
@@ -15,7 +19,6 @@ Download the binary for your platform from the binaries directory
 
 
 ### Usage 
-
 
 To forward from local-port to remote trisul-ip and trisul-port. The -D puts it into daemon mode
 

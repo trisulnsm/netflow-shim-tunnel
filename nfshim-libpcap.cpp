@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <re2/re2.h>
+#include <fstream>
 #include <iostream>
 #include "PrintErrno.h"
 #include "demonizer.h"
@@ -48,6 +48,7 @@ int main(int argc, char *argv[])
 		int				receiver_port=0;
 		std::string		local_bind_ip;
 		std::string     user;
+		std::string     pidfile;
 
 	} cmd_opts;
 
@@ -60,6 +61,7 @@ int main(int argc, char *argv[])
             {"destination-port", 	required_argument, 	nullptr, 'p'},
             {"local-bind-ip", 		required_argument, 	nullptr, 'l'},
             {"user", 				required_argument, 	nullptr, 'u'},
+            {"pid-file", 			required_argument,  nullptr, 'I'},
 
     };
 
@@ -91,6 +93,10 @@ int main(int argc, char *argv[])
 
 			case 'd':
 				cmd_opts.receiver_ip = std::string(optarg);
+				break;
+
+			case 'I':
+				cmd_opts.pidfile = std::string(optarg);
 				break;
 
 			case 'p':
@@ -201,6 +207,24 @@ int main(int argc, char *argv[])
 		sleep(1);
 	}
 
+
+	// PID file
+	if (not cmd_opts.pidfile.empty()) {
+		
+		std::ofstream pidfile(cmd_opts.pidfile.c_str(), std::ios::out | std::ios::binary );
+		if (pidfile.good())
+		{
+			pidfile << std::to_string(getpid());
+			pidfile.close();
+		} 
+		else
+		{
+			CPrintErrno pe(errno);
+			cerr << "warning: Unable to write pidfile " << cmd_opts.pidfile << " err=" << pe.what() << endl;
+		}
+	}
+	
+
 	// run indefinitely
 	while (true) {
 		union {
@@ -223,6 +247,10 @@ int main(int argc, char *argv[])
 			CPrintErrno pe(errno);
 			cerr << "recvfrom() error =" << pe.what() << endl;
 			return 1;
+		}
+
+		if (len==0) {
+			continue;
 		}
 
 		// shim the new ip 
@@ -267,7 +295,7 @@ pcap_t  * 		setup_pcap( const std::string& interface_name,  const std::string& f
     pcap * fd_ret  = pcap_open_live(interface_name.c_str(), 65536, 1,1000, errbuf);
     if(fd_ret  == nullptr)
     {
-        printf("pcap_open_live() failed due to [%s]\n", errbuf);
+        cerr <<  "pcap_open_live() failed due to " <<  errbuf << endl;
         return nullptr;
     }
 
@@ -276,14 +304,15 @@ pcap_t  * 		setup_pcap( const std::string& interface_name,  const std::string& f
 		// Compile the filter expression
 		if(pcap_compile(fd_ret, &fp, filter.c_str(), 0, PCAP_NETMASK_UNKNOWN) == -1)
 		{
-			printf("\npcap_compile() failed\n");
+			cerr <<  "pcap_compile() failed for [" <<  filter << "] err=" << pcap_geterr(fd_ret) << endl;
 			return nullptr;
 		}
 
 		// Set the filter compiled above
 		if(pcap_setfilter(fd_ret, &fp) == -1)
 		{
-			printf("\npcap_setfilter() failed\n");
+			CPrintErrno pe(errno);
+			cerr <<  "pcap_setfilter() failed for [" <<  filter << "] err=" << pe.what() << endl;
 			return nullptr;
 		}
 	}
@@ -299,7 +328,7 @@ int  pcap_recvfrom(pcap_t * pcap_fd , char * outbuf , size_t outbuf_sz, struct s
 
 	int ret = pcap_next_ex(pcap_fd, &pc_header,  & pData);
 	if (ret==-1) {
-		printf("\npcapnext () failed\n");
+		cerr <<  "pcap_next_ex() failed err=" << pcap_geterr(pcap_fd) << endl;
 		return -1;
 	} else if (ret==0) {
 		return 0;
