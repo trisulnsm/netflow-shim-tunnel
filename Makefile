@@ -1,10 +1,13 @@
 CC      = g++
 CFLAGS  = -g -std=c++0x
-LDFLAGS = -lpthread -lre2 
+LDFLAGS = -lpthread -lre2  -lpcap 
 
-all: nfshim 
+all: nfshim  nfshim-pcap 
 
 nfshim: nfshim.o PrintErrno.o demonizer.o
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+nfshim-pcap: nfshim-libpcap.o PrintErrno.o demonizer.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 %.o: %.cpp
@@ -13,5 +16,5 @@ nfshim: nfshim.o PrintErrno.o demonizer.o
 .PHONY: clean 
 
 clean:
-	rm *.o nfshim 
+	rm *.o nfshim  nfshim-pcap
 
