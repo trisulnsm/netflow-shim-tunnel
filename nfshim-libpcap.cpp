@@ -14,7 +14,7 @@
 
 using namespace std;
 
-static const char * USAGESTR="Usage :  nfshim-pcap [-D] -i interface-name  [-f capture-expression]  --destination-ip  receiver-ip --destination-port receiver-port --local-bind-ip ip-address -u username" ;
+static const char * USAGESTR="Usage :  nfshim-pcap [-D] -i interface-name  [-f capture-expression]  --destination-ip  receiver-ip --destination-port receiver-port [--local-bind-ip ip-address] [-u username]  [--pid-file file]" ;
 
 #define  HPTRVAL_USHORT(p)   (ntohs(*((unsigned short *)(p) )))
 
