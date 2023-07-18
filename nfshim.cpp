@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <re2/re2.h>
+#include <regex>
 #include <iostream>
 #include "PrintErrno.h"
 #include "demonizer.h"
@@ -40,17 +40,27 @@ int main(int argc, char *argv[])
 	std::string localip, receiverip, localbindip;
 	int 		localport, receiverport;
 
-	if ( not RE2::FullMatch(argv[1], "([\\d\\.]+):(\\d+)",&localip,&localport) ) {
+	const std::regex mRX( "([\\d\\.]+):(\\d+)");
+	std::smatch mch;
+
+	const std::string  lS(argv[1]);
+	if ( not std::regex_match(lS, mch, mRX )) {
 		cerr << "Error with local ip and port ip format " << argv[1] << endl;
 		cerr << USAGESTR << endl ;
 		return -1;
 	}
+	localip=mch[1];
+	localport=std::stoi(mch[2]);
 
-	if ( not RE2::FullMatch(argv[2], "([\\d\\.]+):(\\d+)",&receiverip,&receiverport) ) {
+
+	const std::string  rS(argv[2]);
+	if ( not std::regex_match( rS, mch, mRX )) {
 		cerr << "Error with receiver ip and port ip format " << argv[2] << endl;
 		cerr << USAGESTR << endl ;
 		return -1;
 	}
+	receiverip=mch[1];
+	receiverport=std::stoi(mch[2]);
 
 	if (argc==4) {
 		localbindip=argv[3];

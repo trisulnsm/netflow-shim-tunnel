@@ -1,6 +1,6 @@
 CC      = g++
-CFLAGS  = -g -std=c++0x
-LDFLAGS = -lpthread -lre2  -lpcap 
+CFLAGS  = -g 
+LDFLAGS = -lpthread  -lpcap 
 
 all: nfshim  nfshim-pcap 
 
