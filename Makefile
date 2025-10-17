@@ -1,5 +1,5 @@
 CC      = g++
-CFLAGS  = -g 
+CFLAGS  = -g  -O2 
 LDFLAGS = -lpthread  -lpcap 
 
 all: nfshim  nfshim-pcap 
