@@ -27,15 +27,16 @@ For more information [Why use a nfshim tunnel](https://www.trisul.org/devzone/do
 To forward from local-port to one or more remote trisul-ip and trisul-port. The -D puts it into daemon mode.
 
 ````
-nfshim [-D] --from-ipport local-ip:local-port --to-ipport receiver-ip:receiver-port [--to-ipport receiver-ip:receiver-port ...] [--bind-address local-ip-for-sending]
+nfshim [-D] [-R] --from-ipport local-ip:local-port --to-ipport receiver-ip:receiver-port [--to-ipport receiver-ip:receiver-port ...] [--bind-address local-ip-for-sending]
 ````
 
 #### Options
 
   1.  `-D` or `--daemonize` :  send into background as daemon
-  2.  `-f` or `--from-ipport` : specify the local IP and port in the format `local-ip:local-port`
-  3.  `-t` or `--to-ipport` : specify the receiver IP and port in the format `receiver-ip:receiver-port`. This option can be specified multiple times to add multiple targets.
-  4.  `-b` or `--bind-address` : optional - bind to a valid local IP address. Packets sent to the receivers will have this IP address.
+  2.  `-R` or `--round-robin` : rotate packets across receivers (P1 to first `--to-ipport`, P2 to second, and so on). Without this flag, each packet is sent to every receiver.
+  3.  `-f` or `--from-ipport` : specify the local IP and port in the format `local-ip:local-port`
+  4.  `-t` or `--to-ipport` : specify the receiver IP and port in the format `receiver-ip:receiver-port`. This option can be specified multiple times to add multiple targets.
+  5.  `-b` or `--bind-address` : optional - bind to a valid local IP address. Packets sent to the receivers will have this IP address.
 
 ### Examples 
 
@@ -44,6 +45,7 @@ nfshim [-D] --from-ipport local-ip:local-port --to-ipport receiver-ip:receiver-p
 ````
 nfshim.el7 -D --from-ipport 0.0.0.0:2055 --to-ipport 192.168.2.99:2055
 ````
+
 
 #### To forward all traffic to multiple receivers, binding 192.168.2.76 as the source IP for sending. 192.168.2.76 must be a valid IP on the server.
 
@@ -59,6 +61,17 @@ This program uses libpcap to capture the UDP packets from one side, pack it into
 
 ````
 nfshim-pcap [-D] -i interface-name  [-f capture-expression]  --destination-ip  receiver-ip --destination-port receiver-port [--local-bind-ip ip-address] [-u username]  [--pid-file file]
+````
+
+### Round Robin Load balancing
+
+Use the -R option
+
+
+````
+nfshim -D -R --from-ipport 0.0.0.0:2055 \
+  --to-ipport 192.168.2.99:2055 \
+  --to-ipport 192.168.2.100:2055
 ````
 
 #### Options

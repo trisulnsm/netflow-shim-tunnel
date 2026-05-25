@@ -16,20 +16,22 @@ struct SOptions {
 
 	using ipport_t  = std::pair<std::string, int>;
     bool fDaemonize;
+    bool fRoundRobin;
     std::string localip;
     std::string localbindip;
     int localport;
     std::vector<ipport_t> receivers; // Changed to pair for IP and Port
 };
 
-static const char * USAGESTR="Usage :  nfshim [--daemonize] --from-ipport local-ip:local-port --to-ipport receiver-ip:receiver-port [--bind-address local-bind-ip] ";
+static const char * USAGESTR="Usage :  nfshim [--daemonize] [-R] --from-ipport local-ip:local-port --to-ipport receiver-ip:receiver-port [--bind-address local-bind-ip] ";
 
 int main(int argc, char *argv[]) 
 {
-    SOptions Sopt = {false, "", "", 0, {} }; // Updated initialization for receiver
+    SOptions Sopt = {false, false, "", "", 0, {} };
 
     static struct option long_options[] = {
         {"daemonize", no_argument, 0, 'D'},
+        {"round-robin", no_argument, 0, 'R'},
         {"from-ipport", required_argument, 0, 'f'},
         {"to-ipport", required_argument, 0, 't'},
         {"bind-address", required_argument, 0, 'b'},
@@ -38,10 +40,13 @@ int main(int argc, char *argv[])
 
     int opt;
     int option_index = 0;
-    while ((opt = getopt_long(argc, argv, "Df:t:b:", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "DRf:t:b:", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'D':
                 Sopt.fDaemonize = true;
+                break;
+            case 'R':
+                Sopt.fRoundRobin = true;
                 break;
             case 'f': {
                 const std::regex mRX("([\\d\\.]+):(\\d+)");
@@ -161,6 +166,8 @@ int main(int argc, char *argv[])
         sleep(1);
     }
 
+    size_t round_robin_idx = 0;
+
     // run indefinitely
     while (true) {
         union {
@@ -193,11 +200,19 @@ int main(int argc, char *argv[])
 
         U.shim.shimip = client_address.sin_addr.s_addr;
 
-        // send the shimmed to receiver  
-		for (size_t i = 0; i < receiver_sockets.size(); ++i) 
+        // send the shimmed to receiver(s)
+		const size_t n_receivers = receiver_sockets.size();
+		const size_t send_begin = Sopt.fRoundRobin ? round_robin_idx : 0;
+		const size_t send_end = Sopt.fRoundRobin ? send_begin + 1 : n_receivers;
+
+		if (Sopt.fRoundRobin) {
+			round_robin_idx = (round_robin_idx + 1) % n_receivers;
+		}
+
+		for (size_t i = send_begin; i < send_end; ++i)
 		{
 			int sock_receiver = receiver_sockets[i];
-			struct sockaddr_in & receiver_address = receiver_addresses[i];	
+			struct sockaddr_in & receiver_address = receiver_addresses[i];
 
 			auto slen = sendto(sock_receiver, U.buffer, len + 12, 0,
 							(struct sockaddr*) &receiver_address, sizeof(receiver_address));
