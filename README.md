@@ -27,16 +27,21 @@ For more information [Why use a nfshim tunnel](https://www.trisul.org/devzone/do
 To forward from local-port to one or more remote trisul-ip and trisul-port. The -D puts it into daemon mode.
 
 ````
-nfshim [-D] [-R] --from-ipport local-ip:local-port --to-ipport receiver-ip:receiver-port [--to-ipport receiver-ip:receiver-port ...] [--bind-address local-ip-for-sending]
+nfshim [-D] [--debug] [-R] --from-ipport local-ip:local-port --to-ipport receiver-ip:receiver-port [--to-ipport receiver-ip:receiver-port ...] [--bind-address local-ip-for-sending] [--include-ip-list ip1,ip2,.. | --exclude-ip-list ip1,ip2,..]
 ````
 
 #### Options
 
   1.  `-D` or `--daemonize` :  send into background as daemon
-  2.  `-R` or `--round-robin` : rotate packets across receivers (P1 to first `--to-ipport`, P2 to second, and so on). Without this flag, each packet is sent to every receiver.
-  3.  `-f` or `--from-ipport` : specify the local IP and port in the format `local-ip:local-port`
-  4.  `-t` or `--to-ipport` : specify the receiver IP and port in the format `receiver-ip:receiver-port`. This option can be specified multiple times to add multiple targets.
-  5.  `-b` or `--bind-address` : optional - bind to a valid local IP address. Packets sent to the receivers will have this IP address.
+  2.  `-v` or `--debug` : print per-packet diagnostics (received router, forwards, dropped packets) to stdout. Automatically disabled in daemon mode.
+  3.  `-R` or `--round-robin` : rotate packets across receivers (P1 to first `--to-ipport`, P2 to second, and so on). Without this flag, each packet is sent to every receiver.
+  4.  `-f` or `--from-ipport` : specify the local IP and port in the format `local-ip:local-port`
+  5.  `-t` or `--to-ipport` : specify the receiver IP and port in the format `receiver-ip:receiver-port`. This option can be specified multiple times to add multiple targets.
+  6.  `-b` or `--bind-address` : optional - bind to a valid local IP address. Packets sent to the receivers will have this IP address.
+  7.  `-I` or `--include-ip-list` : optional - comma separated list of IPv4 addresses. Only netflow packets whose source (router) IP is in this list are forwarded; all others are dropped.
+  8.  `-E` or `--exclude-ip-list` : optional - comma separated list of IPv4 addresses. Netflow packets whose source (router) IP is in this list are dropped; all others are forwarded.
+
+  > `--include-ip-list` and `--exclude-ip-list` are mutually exclusive - specify at most one of them.
 
 ### Examples 
 
@@ -51,6 +56,18 @@ nfshim.el7 -D --from-ipport 0.0.0.0:2055 --to-ipport 192.168.2.99:2055
 
 ````
 nfshim.el7 -D --from-ipport 0.0.0.0:2055 --to-ipport 192.168.2.99:2055 --to-ipport 192.168.2.100:2055 --bind-address 192.168.2.76
+````
+
+#### To forward netflow only from two specific routers (10.0.0.1 and 10.0.0.2) and drop everything else.
+
+````
+nfshim.el7 -D --from-ipport 0.0.0.0:2055 --to-ipport 192.168.2.99:2055 --include-ip-list 10.0.0.1,10.0.0.2
+````
+
+#### To forward all netflow except from a noisy router (10.0.0.9).
+
+````
+nfshim.el7 -D --from-ipport 0.0.0.0:2055 --to-ipport 192.168.2.99:2055 --exclude-ip-list 10.0.0.9
 ````
 
 ## Usage  nfshim-pcap

@@ -5,6 +5,8 @@
 #include <string.h>
 #include <regex>
 #include <iostream>
+#include <set>
+#include <sstream>
 #include "PrintErrno.h"
 #include "demonizer.h"
 #include <unistd.h>
@@ -12,38 +14,74 @@
 
 using namespace std;
 
+enum class EIpFilterMode { None, Include, Exclude };
+
 struct SOptions {
 
 	using ipport_t  = std::pair<std::string, int>;
     bool fDaemonize;
+    bool fDebug;
     bool fRoundRobin;
     std::string localip;
     std::string localbindip;
     int localport;
     std::vector<ipport_t> receivers; // Changed to pair for IP and Port
+    EIpFilterMode ipFilterMode;      // filter on the source (router) IP
+    std::set<uint32_t> ipFilterSet;  // IPs stored in network byte order
 };
 
-static const char * USAGESTR="Usage :  nfshim [--daemonize] [-R] --from-ipport local-ip:local-port --to-ipport receiver-ip:receiver-port [--bind-address local-bind-ip] ";
+static const char * USAGESTR="Usage :  nfshim [--daemonize] [--debug] [-R] --from-ipport local-ip:local-port --to-ipport receiver-ip:receiver-port [--bind-address local-bind-ip] [--include-ip-list ip1,ip2,..  |  --exclude-ip-list ip1,ip2,..] ";
+
+// Parse a comma separated list of IPv4 addresses into a set of addresses
+// stored in network byte order. Returns false on any malformed address.
+static bool ParseIpList(const std::string & list, std::set<uint32_t> & out)
+{
+    std::stringstream ss(list);
+    std::string token;
+    while (std::getline(ss, token, ',')) {
+        // trim surrounding whitespace
+        size_t b = token.find_first_not_of(" \t");
+        size_t e = token.find_last_not_of(" \t");
+        if (b == std::string::npos) {
+            continue; // skip empty entries
+        }
+        token = token.substr(b, e - b + 1);
+
+        struct in_addr addr;
+        if (inet_pton(AF_INET, token.c_str(), &addr) != 1) {
+            cerr << "Invalid IPv4 address in ip list: " << token << endl;
+            return false;
+        }
+        out.insert(addr.s_addr);
+    }
+    return true;
+}
 
 int main(int argc, char *argv[]) 
 {
-    SOptions Sopt = {false, false, "", "", 0, {} };
+    SOptions Sopt = {false, false, false, "", "", 0, {}, EIpFilterMode::None, {} };
 
     static struct option long_options[] = {
         {"daemonize", no_argument, 0, 'D'},
+        {"debug", no_argument, 0, 'v'},
         {"round-robin", no_argument, 0, 'R'},
         {"from-ipport", required_argument, 0, 'f'},
         {"to-ipport", required_argument, 0, 't'},
         {"bind-address", required_argument, 0, 'b'},
+        {"include-ip-list", required_argument, 0, 'I'},
+        {"exclude-ip-list", required_argument, 0, 'E'},
         {0, 0, 0, 0}
     };
 
     int opt;
     int option_index = 0;
-    while ((opt = getopt_long(argc, argv, "DRf:t:b:", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "DvRf:t:b:I:E:", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'D':
                 Sopt.fDaemonize = true;
+                break;
+            case 'v':
+                Sopt.fDebug = true;
                 break;
             case 'R':
                 Sopt.fRoundRobin = true;
@@ -78,6 +116,32 @@ int main(int argc, char *argv[])
             case 'b':
                 Sopt.localbindip = optarg;
                 break;
+            case 'I': {
+                if (Sopt.ipFilterMode != EIpFilterMode::None) {
+                    cerr << "Cannot use --include-ip-list together with --exclude-ip-list." << endl;
+                    cerr << USAGESTR << endl;
+                    return -1;
+                }
+                if (!ParseIpList(optarg, Sopt.ipFilterSet)) {
+                    cerr << USAGESTR << endl;
+                    return -1;
+                }
+                Sopt.ipFilterMode = EIpFilterMode::Include;
+                break;
+            }
+            case 'E': {
+                if (Sopt.ipFilterMode != EIpFilterMode::None) {
+                    cerr << "Cannot use --exclude-ip-list together with --include-ip-list." << endl;
+                    cerr << USAGESTR << endl;
+                    return -1;
+                }
+                if (!ParseIpList(optarg, Sopt.ipFilterSet)) {
+                    cerr << USAGESTR << endl;
+                    return -1;
+                }
+                Sopt.ipFilterMode = EIpFilterMode::Exclude;
+                break;
+            }
             default:
                 cerr << USAGESTR << endl;
                 return -1;
@@ -86,6 +150,18 @@ int main(int argc, char *argv[])
 
     if (Sopt.localip.empty() || Sopt.receivers.empty() || Sopt.localport == 0) {
         cerr << "Missing required options." << endl;
+        cerr << USAGESTR << endl;
+        return -1;
+    }
+
+    // Debug logging is meaningless once we detach from the terminal, so it is
+    // always disabled in daemon mode regardless of --debug.
+    if (Sopt.fDaemonize) {
+        Sopt.fDebug = false;
+    }
+
+    if (Sopt.ipFilterMode != EIpFilterMode::None && Sopt.ipFilterSet.empty()) {
+        cerr << "Empty ip list supplied to --include-ip-list/--exclude-ip-list." << endl;
         cerr << USAGESTR << endl;
         return -1;
     }
@@ -157,7 +233,7 @@ int main(int argc, char *argv[])
 	}
     // The address to be used as a shim 
     struct sockaddr_in client_address;
-    socklen_t  client_address_len = 0;
+    socklen_t  client_address_len = sizeof(client_address);
 
     // Daemonize 
     if (Sopt.fDaemonize) {
@@ -194,8 +270,20 @@ int main(int argc, char *argv[])
         }
 
         // shim the new ip 
-        if (!Sopt.fDaemonize) {
+        if (Sopt.fDebug) {
             cout << "Router " << inet_ntoa(client_address.sin_addr) << " bytes = " << len << endl << flush; 
+        }
+
+        // Filter on the source (router) IP if a filter list was supplied.
+        if (Sopt.ipFilterMode != EIpFilterMode::None) {
+            const bool inList = Sopt.ipFilterSet.count(client_address.sin_addr.s_addr) > 0;
+            const bool allow  = (Sopt.ipFilterMode == EIpFilterMode::Include) ? inList : !inList;
+            if (!allow) {
+                if (Sopt.fDebug) {
+                    cout << "Dropped (ip filter) router " << inet_ntoa(client_address.sin_addr) << endl << flush;
+                }
+                continue;
+            }
         }
 
         U.shim.shimip = client_address.sin_addr.s_addr;
@@ -223,7 +311,7 @@ int main(int argc, char *argv[])
 				return 1;
 			}
 
-			if (!Sopt.fDaemonize) {
+			if (Sopt.fDebug) {
 				cout << "Forwarded  shimmed  bytes [" << i << "] len= " << slen << endl << flush;
 			}
 
