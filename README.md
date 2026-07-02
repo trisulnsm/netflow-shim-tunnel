@@ -43,6 +43,8 @@ nfshim [-D] [--debug] [-R] --from-ipport local-ip:local-port --to-ipport receive
 
   > `--include-ip-list` and `--exclude-ip-list` are mutually exclusive - specify at most one of them.
 
+  > **NAT caveat:** the "source (router) IP" used for filtering (and for the shim tunnel header) is the packet's source address *as seen by this host's socket* - i.e. the **post-NAT** address. If the netflow arrives through a router doing SNAT/masquerade (or DNAT'd via a public VIP), the original exporter IP is already rewritten before `nfshim` sees it. In that case use the post-NAT address in the list, or remove the masquerade upstream so the real exporter IP is preserved. Verify what the host actually receives with `tcpdump -ni <intf> udp port <local-port>` versus the `-v` output.
+
 ### Examples 
 
 #### To forward all netflow traffic on gateway on port 2055 to Trisul running on 192.168.2.99:2055. 

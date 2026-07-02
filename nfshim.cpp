@@ -184,6 +184,30 @@ int main(int argc, char *argv[])
         return -1;
     }
 
+    // Netflow arrives in bursts from many routers. While we are busy in
+    // sendto() the kernel keeps queuing incoming datagrams in this socket's
+    // receive buffer; if it fills up the kernel silently drops packets. Ask
+    // for a large receive buffer to absorb the bursts. SO_RCVBUF is capped by
+    // net.core.rmem_max; SO_RCVBUFFORCE (root only) bypasses that cap.
+    {
+        const int desired = 32 * 1024 * 1024; // 32 MiB
+        if (setsockopt(sock_local, SOL_SOCKET, SO_RCVBUFFORCE, &desired, sizeof(desired)) < 0) {
+            // Fall back to the normal (rmem_max-capped) request when not root.
+            if (setsockopt(sock_local, SOL_SOCKET, SO_RCVBUF, &desired, sizeof(desired)) < 0) {
+                CPrintErrno pe(errno);
+                cerr << "Warning: could not set SO_RCVBUF: " << pe.what() << endl;
+            }
+        }
+        if (Sopt.fDebug) {
+            int actual = 0;
+            socklen_t optlen = sizeof(actual);
+            if (getsockopt(sock_local, SOL_SOCKET, SO_RCVBUF, &actual, &optlen) == 0) {
+                // The kernel reports double the usable size (bookkeeping overhead).
+                cout << "Local socket receive buffer = " << actual << " bytes" << endl << flush;
+            }
+        }
+    }
+
     if ((bind(sock_local, (struct sockaddr *)&server_address,
               sizeof(server_address))) < 0) {
         CPrintErrno pe(errno);
